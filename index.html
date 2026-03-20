@@ -440,6 +440,44 @@
 
 <script>
 // =====================
+// GOOGLE SHEETS LOGGING
+// =====================
+const APPS_SCRIPT_URL = 'PASTE_YOUR_WEB_APP_URL_HERE';
+
+function saveToSheet() {
+  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'PASTE_YOUR_WEB_APP_URL_HERE') return;
+  if (!analysisData || !analysisData.wordCount) return;
+
+  const issues = analysisData._issues || [];
+  const passes = analysisData._passes || [];
+
+  const payload = {
+    timestamp:     new Date().toLocaleString('en-IN'),
+    writerName:    document.getElementById('writerName').value || '—',
+    evaluatorName: document.getElementById('evaluatorName').value || '—',
+    articleTitle:  document.getElementById('articleTitle').value || '—',
+    wordCount:     analysisData.wordCount,
+    longSentPct:   analysisData.longSentPct,
+    passivePct:    analysisData.passivePct,
+    subheadings:   (analysisData.subheadings || []).length,
+    quoteRatio:    analysisData.quoteRatio,
+    longParas:     (analysisData.longParas || []).length,
+    clickbaitFound:(analysisData.clickbaitFound || []).join(', ') || 'None',
+    issuesFail:    issues.filter(i => i.type === 'fail').length,
+    issuesWarn:    issues.filter(i => i.type === 'warn').length,
+    passes:        passes.length,
+    allIssues:     issues.map(i => i.text).join(' | ') || 'None'
+  };
+
+  fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).catch(() => {}); // silent fail — never block the UI
+}
+
+// =====================
 // UTILITY
 // =====================
 function switchTab(name) {
@@ -449,7 +487,7 @@ function switchTab(name) {
   });
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  if (name === 'results') renderResults();
+  if (name === 'results') { renderResults(); saveToSheet(); }
   scrollToTop();
 }
 function scrollToTop() { window.scrollTo({top: 0, behavior: 'smooth'}); }
