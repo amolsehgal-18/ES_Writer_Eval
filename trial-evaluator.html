@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ES Writer Trial Evaluator</title>
+<!-- File parsing libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root {
+    --es-red: #e53935;
+    --es-dark: #111111;
+    --es-bg: #f4f4f4;
+    --es-white: #ffffff;
+    --es-gray: #666;
+    --es-light: #fafafa;
+    --es-border: #e0e0e0;
+    --pass: #2e7d32;
+    --warn: #e65100;
+    --fail: #c62828;
+    --pass-bg: #e8f5e9;
+    --warn-bg: #fff3e0;
+    --fail-bg: #ffebee;
+    --card-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--es-bg); color: #222; font-size: 14px; }
+
+  /* HEADER */
+  .header { background: var(--es-dark); color: var(--es-white); padding: 18px 32px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+  .header .logo { width: 44px; height: 44px; background: var(--es-red); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 16px; letter-spacing: -1px; flex-shrink: 0; }
+  .header h1 { font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
+  .header p { font-size: 12px; color: #aaa; margin-top: 2px; }
+  .header-right { margin-left: auto; display: flex; gap: 10px; }
+  .btn { padding: 9px 20px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.15s; }
+  .btn-primary { background: var(--es-red); color: white; }
+  .btn-primary:hover { background: #c62828; }
+  .btn-secondary { background: #333; color: white; }
+  .btn-secondary:hover { background: #444; }
+  .btn-outline { background: transparent; color: white; border: 1px solid #555; }
+  .btn-outline:hover { background: #222; }
+
+  /* LAYOUT */
+  .container { max-width: 1200px; margin: 0 auto; padding: 24px 20px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+  /* TABS */
+  .tabs { display: flex; gap: 0; border-bottom: 2px solid var(--es-border); margin-bottom: 24px; }
+  .tab { padding: 11px 22px; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--es-gray); border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all 0.15s; }
+  .tab.active { color: var(--es-red); border-bottom-color: var(--es-red); }
+  .tab:hover:not(.active) { color: #333; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* CARDS */
+  .card { background: var(--es-white); border-radius: 10px; padding: 22px; box-shadow: var(--card-shadow); margin-bottom: 20px; }
+  .card-title { font-size: 15px; font-weight: 700; color: var(--es-dark); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .card-title .icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+  .icon-red { background: #ffebee; color: var(--es-red); }
+  .icon-blue { background: #e3f2fd; color: #1565c0; }
+  .icon-green { background: #e8f5e9; color: #2e7d32; }
+  .icon-orange { background: #fff3e0; color: #e65100; }
+  .icon-purple { background: #f3e5f5; color: #6a1b9a; }
+
+  /* FORM ELEMENTS */
+  label { display: block; font-weight: 600; font-size: 12px; color: var(--es-gray); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  input[type="text"], textarea, select {
+    width: 100%; border: 1.5px solid var(--es-border); border-radius: 6px;
+    padding: 9px 12px; font-size: 13px; font-family: inherit;
+    transition: border-color 0.15s; background: #fefefe; color: #222;
+  }
+  input[type="text"]:focus, textarea:focus, select:focus { border-color: var(--es-red); outline: none; }
+  textarea { resize: vertical; line-height: 1.6; }
+  .form-group { margin-bottom: 16px; }
+  .char-count { font-size: 11px; color: var(--es-gray); margin-top: 4px; text-align: right; }
+  .char-count.good { color: var(--pass); }
+  .char-count.warn { color: var(--warn); }
+  .char-count.bad { color: var(--fail); }
+
+  /* SCORE INPUTS */
+  .score-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f0f0f0; }
+  .score-row:last-child { border-bottom: none; }
+  .score-label { flex: 1; font-size: 13px; }
+  .score-label strong { display: block; font-weight: 600; color: #222; }
+  .score-label span { font-size: 12px; color: var(--es-gray); }
+  .score-input-wrap { display: flex; align-items: center; gap: 8px; }
+  .score-select { width: 80px; padding: 6px 8px; font-size: 13px; }
+  .max-score { font-size: 11px; color: #999; white-space: nowrap; }
+
+  /* STATUS BADGES */
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .badge-pass { background: var(--pass-bg); color: var(--pass); }
+  .badge-warn { background: var(--warn-bg); color: var(--warn); }
+  .badge-fail { background: var(--fail-bg); color: var(--fail); }
+  .badge-neutral { background: #f5f5f5; color: #555; }
+
+  /* AUTO ANALYSIS */
+  .analysis-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .analysis-item { background: #fafafa; border: 1.5px solid var(--es-border); border-radius: 8px; padding: 14px; }
+  .analysis-item.pass { border-color: #a5d6a7; background: var(--pass-bg); }
+  .analysis-item.warn { border-color: #ffcc80; background: var(--warn-bg); }
+  .analysis-item.fail { border-color: #ef9a9a; background: var(--fail-bg); }
+  .analysis-item .metric { font-size: 22px; font-weight: 800; color: var(--es-dark); }
+  .analysis-item .metric-label { font-size: 11px; color: var(--es-gray); font-weight: 600; text-transform: uppercase; margin-bottom: 4px; }
+  .analysis-item .metric-status { font-size: 11px; margin-top: 4px; font-weight: 600; }
+  .analysis-item.pass .metric-status { color: var(--pass); }
+  .analysis-item.warn .metric-status { color: var(--warn); }
+  .analysis-item.fail .metric-status { color: var(--fail); }
+
+  /* ISSUES LIST */
+  .issues-list { list-style: none; }
+  .issues-list li { padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; font-size: 13px; display: flex; gap: 8px; align-items: flex-start; }
+  .issues-list li.issue-fail { background: var(--fail-bg); color: #b71c1c; }
+  .issues-list li.issue-warn { background: var(--warn-bg); color: #bf360c; }
+  .issues-list li.issue-pass { background: var(--pass-bg); color: #1b5e20; }
+  .issues-list li .issue-icon { flex-shrink: 0; font-size: 14px; }
+
+  /* SCORE DISPLAY */
+  .score-display { text-align: center; padding: 30px; }
+  .score-circle { width: 140px; height: 140px; border-radius: 50%; border: 8px solid; display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 0 auto 16px; }
+  .score-circle .score-num { font-size: 42px; font-weight: 900; line-height: 1; }
+  .score-circle .score-denom { font-size: 14px; color: #888; }
+  .score-circle.excellent { border-color: var(--pass); color: var(--pass); }
+  .score-circle.good { border-color: #558b2f; color: #558b2f; }
+  .score-circle.average { border-color: #f57f17; color: #f57f17; }
+  .score-circle.poor { border-color: var(--fail); color: var(--fail); }
+  .verdict-badge { font-size: 18px; font-weight: 800; padding: 8px 24px; border-radius: 30px; display: inline-block; margin-bottom: 12px; }
+  .verdict-hire { background: #e8f5e9; color: var(--pass); border: 2px solid #a5d6a7; }
+  .verdict-consider { background: #fff3e0; color: #e65100; border: 2px solid #ffcc80; }
+  .verdict-reject { background: #ffebee; color: var(--fail); border: 2px solid #ef9a9a; }
+  .verdict-text { font-size: 13px; color: var(--es-gray); max-width: 300px; margin: 0 auto; line-height: 1.6; }
+
+  /* SECTION SCORES */
+  .section-scores { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 20px; }
+  .section-score-item { background: #fafafa; border-radius: 8px; padding: 14px; text-align: center; border: 1.5px solid var(--es-border); }
+  .section-score-item .ss-score { font-size: 24px; font-weight: 800; }
+  .section-score-item .ss-label { font-size: 11px; color: var(--es-gray); font-weight: 600; text-transform: uppercase; margin-top: 4px; }
+  .progress-bar { height: 6px; background: #eee; border-radius: 3px; margin-top: 8px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+
+  /* FEEDBACK AREA */
+  .feedback-box { background: #fafafa; border: 1.5px solid var(--es-border); border-radius: 8px; padding: 16px; margin-top: 16px; }
+  .feedback-box h4 { font-size: 13px; font-weight: 700; margin-bottom: 10px; color: #333; }
+  .feedback-box textarea { background: white; font-size: 13px; }
+
+  /* CHECKLIST */
+  .checklist { list-style: none; }
+  .checklist li { padding: 10px 0; border-bottom: 1px solid #f5f5f5; display: flex; align-items: flex-start; gap: 10px; }
+  .checklist li:last-child { border-bottom: none; }
+  .check-item { display: flex; gap: 10px; width: 100%; align-items: center; cursor: pointer; }
+  .check-item input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--es-red); flex-shrink: 0; margin-top: 1px; }
+  .check-item .check-text { flex: 1; }
+  .check-item .check-title { font-size: 13px; font-weight: 600; color: #222; }
+  .check-item .check-desc { font-size: 11px; color: var(--es-gray); margin-top: 2px; }
+  .check-item .check-pts { font-size: 11px; font-weight: 700; color: var(--es-red); white-space: nowrap; }
+
+  /* HIGHLIGHTED SENTENCES */
+  .highlighted-text { background: #fafafa; border: 1px solid var(--es-border); border-radius: 6px; padding: 14px; font-size: 13px; line-height: 1.8; max-height: 300px; overflow-y: auto; }
+  .highlight-long { background: #fff3cd; border-bottom: 2px solid #ffc107; }
+  .highlight-passive { background: #fce4ec; border-bottom: 2px solid #e91e63; }
+
+  /* DIVIDER */
+  .divider { border: none; border-top: 1px solid var(--es-border); margin: 20px 0; }
+
+  /* RESPONSIVE */
+  @media (max-width: 768px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .header h1 { font-size: 16px; }
+    .container { padding: 16px; }
+  }
+
+  /* EXPORT */
+  #exportSection { display: none; }
+  .print-header { display: none; }
+  @media print {
+    .header, .tabs, .btn, #step1, #step2, .feedback-box { display: none !important; }
+    .print-header { display: block !important; padding: 20px 0; border-bottom: 2px solid #000; margin-bottom: 20px; }
+    body { background: white; }
+    .card { box-shadow: none; border: 1px solid #ddd; }
+  }
+
+  /* Sentence analysis highlighting */
+  .sentence-chip { display: inline; padding: 1px 3px; border-radius: 3px; }
+  .sentence-long { background: #fff3cd; }
+  .sentence-passive { background: #fce4ec; }
+
+  /* FILE UPLOAD */
+  .upload-zone {
+    border: 2px dashed var(--es-border); border-radius: 10px; padding: 28px 20px;
+    text-align: center; cursor: pointer; transition: all 0.2s;
+    background: #fafafa; position: relative;
+  }
+  .upload-zone:hover, .upload-zone.drag-over { border-color: var(--es-red); background: #fff5f5; }
+  .upload-zone input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+  .upload-icon { font-size: 36px; margin-bottom: 8px; }
+  .upload-zone h3 { font-size: 15px; font-weight: 700; color: #333; margin-bottom: 4px; }
+  .upload-zone p { font-size: 12px; color: #888; }
+  .upload-zone .formats { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
+  .format-badge { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+  .fmt-docx { background: #e3f2fd; color: #1565c0; }
+  .fmt-pdf  { background: #fce4ec; color: #c62828; }
+  .fmt-txt  { background: #e8f5e9; color: #2e7d32; }
+  .upload-status { margin-top: 14px; padding: 10px 14px; border-radius: 8px; font-size: 13px; display: none; align-items: center; gap: 10px; }
+  .upload-status.loading { background: #e3f2fd; color: #1565c0; display: flex; }
+  .upload-status.success { background: var(--pass-bg); color: var(--pass); display: flex; }
+  .upload-status.error   { background: var(--fail-bg); color: var(--fail); display: flex; }
+  .upload-status .spinner { width: 16px; height: 16px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .file-preview { background: #f9f9f9; border: 1px solid var(--es-border); border-radius: 8px; padding: 12px 14px; margin-top: 12px; display: none; }
+  .file-preview-row { display: flex; align-items: center; gap: 10px; }
+  .file-icon { font-size: 24px; }
+  .file-info { flex: 1; }
+  .file-info .file-name { font-weight: 700; font-size: 13px; color: #222; }
+  .file-info .file-meta { font-size: 11px; color: #888; margin-top: 2px; }
+  .remove-file { background: none; border: 1px solid #ddd; border-radius: 4px; padding: 4px 10px; font-size: 11px; color: #666; cursor: pointer; }
+  .remove-file:hover { background: #ffebee; color: var(--fail); border-color: #ef9a9a; }
+  .input-mode-toggle { display: flex; gap: 0; border: 1.5px solid var(--es-border); border-radius: 8px; overflow: hidden; margin-bottom: 16px; }
+  .mode-btn { flex: 1; padding: 9px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; background: #fafafa; color: #666; transition: all 0.15s; }
+  .mode-btn.active { background: var(--es-red); color: white; }
+  .mode-panel { display: none; }
+  .mode-panel.active { display: block; }
+
+  .tip { font-size: 11px; color: #888; font-style: italic; padding: 6px 10px; background: #f9f9f9; border-left: 3px solid #ddd; border-radius: 3px; margin-top: 8px; }
+  .section-header { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--es-red); margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid #f0f0f0; }
+
+  .pill-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .pill { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .pill-red { background: #ffebee; color: var(--es-red); }
+  .pill-green { background: var(--pass-bg); color: var(--pass); }
+  .pill-orange { background: var(--warn-bg); color: var(--warn); }
+
+  .sticky-score { position: fixed; bottom: 20px; right: 20px; background: var(--es-dark); color: white; border-radius: 50px; padding: 12px 22px; font-weight: 700; font-size: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); display: none; z-index: 200; cursor: pointer; }
+  .sticky-score span { color: var(--es-red); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">ES</div>
+  <div>
+    <h1>Writer Trial Evaluator</h1>
+    <p>EssentiallySports — Based on the ES Writers' Playbook</p>
+  </div>
+  <div class="header-right">
+    <button class="btn btn-outline" onclick="resetForm()">Reset</button>
+    <button class="btn btn-secondary" onclick="window.print()">Export PDF</button>
+    <button class="btn btn-primary" onclick="runAnalysis()">&#9654; Run Analysis</button>
+  </div>
+</div>
+
+<div class="sticky-score" id="stickyScore" onclick="scrollToResults()">
+  Score: <span id="stickyScoreVal">—</span>/100
+</div>
+
+<div class="container">
+
+  <!-- TABS -->
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('input')">1. Article Input</div>
+    <div class="tab" onclick="switchTab('auto')">2. Auto Analysis</div>
+    <div class="tab" onclick="switchTab('results')">3. Results & Verdict</div>
+  </div>
+
+  <!-- TAB 1: INPUT -->
+  <div class="tab-content active" id="tab-input">
+    <div class="grid-2">
+      <div>
+        <div class="card">
+          <div class="card-title"><span class="icon icon-red">✏️</span> Article Details</div>
+          <div class="form-group">
+            <label>Article Title *</label>
+            <input type="text" id="articleTitle" placeholder="Paste the full article title here..." oninput="updateTitleCount()">
+            <div class="char-count" id="titleCount">0 characters</div>
+          </div>
+          <div class="form-group">
+            <label>Writer Name (Trial Candidate)</label>
+            <input type="text" id="writerName" placeholder="Writer's name...">
+          </div>
+          <div class="form-group">
+            <label>Evaluator Name</label>
+            <input type="text" id="evaluatorName" placeholder="Your name...">
+          </div>
+        </div>
+
+      </div>
+
+      <div>
+        <div class="card" style="height: calc(100% - 20px);">
+          <div class="card-title"><span class="icon icon-green">📄</span> Article Content *</div>
+
+          <!-- MODE CHECKBOXES -->
+          <div style="display:flex; gap:20px; margin-bottom:16px;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; font-weight:600; color:#333; text-transform:none; letter-spacing:0;">
+              <input type="checkbox" id="chkUpload" onchange="handleModeCheckbox('upload')" style="width:16px;height:16px;accent-color:var(--es-red);cursor:pointer;">
+              📎 Attach File
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; font-weight:600; color:#333; text-transform:none; letter-spacing:0;">
+              <input type="checkbox" id="chkPaste" onchange="handleModeCheckbox('paste')" style="width:16px;height:16px;accent-color:var(--es-red);cursor:pointer;">
+              ✏️ Manual Input
+            </label>
+          </div>
+
+          <!-- UPLOAD MODE -->
+          <div class="mode-panel" id="modeUploadPanel">
+            <div class="upload-zone" id="uploadZone"
+              ondragover="handleDragOver(event)"
+              ondragleave="handleDragLeave(event)"
+              ondrop="handleDrop(event)">
+              <input type="file" id="fileInput" accept=".txt,.docx,.pdf,.doc"
+                onchange="handleFileSelect(event)">
+              <div class="upload-icon">📂</div>
+              <h3>Drop your article file here</h3>
+              <p>or click to browse from your computer</p>
+              <div class="formats">
+                <span class="format-badge fmt-docx">DOCX</span>
+                <span class="format-badge fmt-pdf">PDF</span>
+                <span class="format-badge fmt-txt">TXT</span>
+              </div>
+            </div>
+
+            <!-- File preview -->
+            <div class="file-preview" id="filePreview">
+              <div class="file-preview-row">
+                <div class="file-icon" id="fileIconDisplay">📄</div>
+                <div class="file-info">
+                  <div class="file-name" id="fileNameDisplay">—</div>
+                  <div class="file-meta" id="fileMetaDisplay">—</div>
+                </div>
+                <button class="remove-file" onclick="removeFile()">✕ Remove</button>
+              </div>
+            </div>
+
+            <!-- Status -->
+            <div class="upload-status" id="uploadStatus">
+              <div class="spinner" id="uploadSpinner"></div>
+              <span id="uploadStatusText">Processing…</span>
+            </div>
+
+            <div class="tip" style="margin-top:12px;">
+              Subheadings in your doc are auto-detected. For best results, use <strong>Heading 2</strong> style in Word or prefix lines with <code>##</code> in plain text.
+            </div>
+
+            <!-- Extracted preview -->
+            <div id="extractedPreviewWrap" style="display:none; margin-top:14px;">
+              <div style="font-size:12px;font-weight:700;color:var(--es-gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">
+                Extracted Text Preview
+                <button onclick="toggleExtractedPreview()" id="extractedToggleBtn" style="font-size:11px;font-weight:600;color:var(--es-red);background:none;border:none;cursor:pointer;margin-left:8px;">Hide ▲</button>
+              </div>
+              <textarea id="extractedPreview" rows="10" style="font-size:12px;color:#555;background:#f9f9f9;" oninput="syncFromPreview()"></textarea>
+              <div class="char-count" id="wordCountLive2">0 words</div>
+              <div class="tip" style="margin-top:6px;">You can edit the extracted text above to fix any extraction issues.</div>
+            </div>
+          </div>
+
+          <!-- PASTE MODE -->
+          <div class="mode-panel" id="modePastePanel">
+            <p class="tip" style="margin-bottom: 12px;">Paste the full article body text below (excluding image captions and embeds). Mark subheadings with <code>##</code> prefix.</p>
+            <textarea id="articleBody" rows="24" placeholder="Paste the full article body text here...&#10;&#10;## Subheading Example&#10;&#10;Article paragraph text goes here. Include all paragraphs, subheadings, and quotes." oninput="liveWordCount()"></textarea>
+            <div class="char-count" id="wordCountLive">0 words</div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align:center; margin-top: 8px;">
+      <button class="btn btn-primary" style="padding: 12px 40px; font-size: 15px;" onclick="runAnalysis()">&#9654; Analyse Article</button>
+    </div>
+  </div>
+
+  <!-- TAB 2: AUTO ANALYSIS -->
+  <div class="tab-content" id="tab-auto">
+    <div id="autoAnalysisEmpty" class="card" style="text-align:center; padding: 40px; color: var(--es-gray);">
+      <div style="font-size: 40px; margin-bottom: 12px;">🔍</div>
+      <div style="font-weight: 600;">No analysis yet.</div>
+      <div style="margin-top: 6px;">Go to <strong>Article Input</strong> and click <strong>Analyse Article</strong>.</div>
+    </div>
+    <div id="autoAnalysisResults" style="display:none;">
+      <div class="card">
+        <div class="card-title"><span class="icon icon-blue">📊</span> Automated Metrics</div>
+        <div class="analysis-grid" id="metricsGrid"></div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title"><span class="icon icon-red">⚠️</span> Issues Detected</div>
+          <ul class="issues-list" id="issuesList"></ul>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="icon icon-green">✅</span> Passing Checks</div>
+          <ul class="issues-list" id="passList"></ul>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="icon icon-orange">🟡</span> Long Sentences (>15 words) — Review These</div>
+        <div id="longSentencesOutput" class="highlighted-text"></div>
+        <div class="tip">Sentences exceeding 15 words reduce Flesch readability. Occasional long sentences are acceptable — look for patterns.</div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="icon icon-purple">📝</span> Passive Voice Candidates — Review These</div>
+        <div id="passiveOutput" class="highlighted-text"></div>
+        <div class="tip">These sentences may contain passive constructions. Active voice is preferred per the Playbook.</div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- TAB 4: RESULTS -->
+  <div class="tab-content" id="tab-results">
+    <div id="resultsEmpty" class="card" style="text-align:center; padding: 40px; color: var(--es-gray);">
+      <div style="font-size: 40px; margin-bottom: 12px;">📋</div>
+      <div style="font-weight: 600;">Run the analysis first.</div>
+      <div style="margin-top: 6px;">Go to <strong>Article Input</strong>, fill in the article details and content, then click <strong>Run Analysis</strong>.</div>
+    </div>
+    <div id="resultsContent">
+      <div class="card">
+        <div style="font-size:12px; font-weight:700; color:#999; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px;">Submission Details</div>
+        <div style="font-size:13px; display:grid; gap:6px;" id="submissionDetails"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><span class="icon icon-purple">🤖</span> Automated Analysis Summary</div>
+        <div class="analysis-grid" id="metricsGridResults"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><span class="icon icon-red">⚠️</span> All Detected Issues</div>
+        <ul class="issues-list" id="issuesListResults"></ul>
+      </div>
+
+      <div style="text-align: center; margin: 24px 0;">
+        <button class="btn btn-primary" style="padding: 12px 36px;" onclick="window.print()">🖨️ Print / Save PDF</button>
+        <button class="btn btn-secondary" style="padding: 12px 36px; margin-left: 12px;" onclick="copyToClipboard()">📋 Copy Summary</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+// =====================
+// UTILITY
+// =====================
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const names = ['input','auto','results'];
+    t.classList.toggle('active', names[i] === name);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'results') renderResults();
+  scrollToTop();
+}
+function scrollToTop() { window.scrollTo({top: 0, behavior: 'smooth'}); }
+function scrollToResults() { switchTab('results'); }
+
+function updateTitleCount() {
+  const l = document.getElementById('articleTitle').value.length;
+  const el = document.getElementById('titleCount');
+  el.textContent = l + ' characters';
+}
+function liveWordCount() {
+  const words = countWords(document.getElementById('articleBody').value);
+  const el = document.getElementById('wordCountLive');
+  el.textContent = words + ' words';
+  el.className = 'char-count ' + (words >= 400 ? 'good' : 'warn');
+}
+function countWords(text) {
+  return text.trim().split(/\s+/).filter(w => w.length > 0).length;
+}
+function countSentences(text) {
+  return text.split(/[.!?]+/).filter(s => s.trim().length > 3);
+}
+function getSentences(text) {
+  return text.match(/[^.!?]+[.!?]*/g) || [];
+}
+function detectPassive(sentence) {
+  const passivePatterns = [
+    /\b(is|are|was|were|be|been|being)\s+\w+ed\b/i,
+    /\b(is|are|was|were)\s+\w+en\b/i,
+    /\bwas\s+\w+ed\b/i,
+    /\bhas been\s+\w+ed\b/i,
+    /\bhave been\s+\w+ed\b/i,
+    /\bwere\s+\w+ed\b/i,
+    /\bgets?\s+\w+ed\b/i,
+  ];
+  return passivePatterns.some(p => p.test(sentence));
+}
+function getWordCount(sentence) {
+  return sentence.trim().split(/\s+/).filter(w => w.length > 0).length;
+}
+
+// Subheading detection (## prefix, H2: prefix, or ALL CAPS short lines)
+function detectSubheadings(text) {
+  const lines = text.split('\n');
+  const subs = [];
+  lines.forEach(line => {
+    const l = line.trim();
+    if (l.startsWith('##') || l.startsWith('H2:') || /^[A-Z][A-Z\s'":,]{4,60}$/.test(l) && l.split(/\s+/).length <= 12) {
+      subs.push(l.replace(/^#+\s*/, '').replace(/^H2:\s*/,''));
+    }
+  });
+  return subs;
+}
+
+function detectQuotedText(text) {
+  const matches = text.match(/"[^"]{10,500}"/g) || [];
+  return matches;
+}
+
+function getFirstSubheadingWordPosition(text) {
+  const lines = text.split('\n');
+  let wordCount = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i].trim();
+    if (l.startsWith('##') || l.startsWith('H2:') || (/^[A-Z][A-Z\s'":,]{4,60}$/.test(l) && l.split(/\s+/).length <= 12)) {
+      return wordCount;
+    }
+    wordCount += l.split(/\s+/).filter(w => w.length > 0).length;
+  }
+  return Infinity;
+}
+
+function getClickbaitWords() {
+  return ['shocking', 'unbelievable', 'mind-blowing', 'jaw-dropping', 'insane', 'incredible',
+    'you won\'t believe', 'nobody expected', 'destroys', 'obliterates', 'ruins', 'devastated',
+    'bombshell', 'secret revealed', 'exposed', 'epic fail'];
+}
+
+function checkTitleCase(title) {
+  const words = title.split(' ');
+  const exceptions = ['a','an','the','and','but','or','for','nor','on','at','to','by','of','in','up','as','is','it'];
+  for (let i = 1; i < words.length - 1; i++) {
+    const w = words[i].toLowerCase();
+    if (!exceptions.includes(w) && words[i][0] !== words[i][0].toUpperCase()) return false;
+  }
+  return words.length > 0 && words[0][0] === words[0][0].toUpperCase();
+}
+
+// =====================
+// MAIN ANALYSIS
+// =====================
+let analysisData = {};
+
+function runAnalysis() {
+  const body = document.getElementById('articleBody').value.trim();
+  const title = document.getElementById('articleTitle').value.trim();
+
+  if (!body) { alert('Please paste the article body text first.'); return; }
+
+  // Metrics
+  const wordCount = countWords(body);
+  const sentences = getSentences(body);
+  const totalSentences = sentences.filter(s => s.trim().length > 5).length;
+  const longSentences = sentences.filter(s => getWordCount(s) > 15);
+  const passiveSentences = sentences.filter(s => detectPassive(s) && s.trim().length > 10);
+  const subheadings = detectSubheadings(body);
+  const quotes = detectQuotedText(body);
+  const quoteWords = quotes.join(' ').split(/\s+/).filter(w=>w.length>0).length;
+  const quoteRatio = wordCount > 0 ? Math.round((quoteWords / wordCount) * 100) : 0;
+  const firstSubPos = getFirstSubheadingWordPosition(body);
+  const longSentPct = totalSentences > 0 ? Math.round((longSentences.length / totalSentences) * 100) : 0;
+  const passivePct = totalSentences > 0 ? Math.round((passiveSentences.length / totalSentences) * 100) : 0;
+
+  // Paragraphs
+  const paragraphs = body.split(/\n\n+/).filter(p => p.trim().length > 20 && !p.trim().startsWith('##') && !p.trim().startsWith('H2:'));
+  const longParas = paragraphs.filter(p => {
+    const lineCount = p.split(/\n/).filter(l => l.trim().length > 0).length;
+    const wordCount = p.split(/\s+/).length;
+    return wordCount > 80 || lineCount > 5;
+  });
+
+  // Title checks
+  const titleLower = title.toLowerCase();
+  const clickbaitFound = getClickbaitWords().filter(w => titleLower.includes(w));
+
+  analysisData = {
+    wordCount, longSentences, passiveSentences, subheadings,
+    quotes, quoteRatio, firstSubPos,
+    longSentPct, passivePct,
+    longParas, clickbaitFound, totalSentences, body, title
+  };
+
+  renderAutoAnalysis();
+  switchTab('auto');
+}
+
+function renderAutoAnalysis() {
+  const d = analysisData;
+  document.getElementById('autoAnalysisEmpty').style.display = 'none';
+  document.getElementById('autoAnalysisResults').style.display = 'block';
+
+  // Metrics grid
+  const metrics = [
+    {
+      label: 'Word Count',
+      value: d.wordCount,
+      unit: 'words',
+      status: d.wordCount >= 400 ? 'pass' : 'fail',
+      statusText: d.wordCount >= 400 ? '✓ Meets 400 minimum' : '✗ Below 400 minimum'
+    },
+    {
+      label: 'Long Sentences',
+      value: d.longSentPct + '%',
+      unit: 'over 15 words',
+      status: d.longSentPct <= 20 ? 'pass' : d.longSentPct <= 35 ? 'warn' : 'fail',
+      statusText: d.longSentPct <= 20 ? '✓ Good readability' : d.longSentPct <= 35 ? '⚠ Some long sentences' : '✗ Too many long sentences'
+    },
+    {
+      label: 'Passive Voice',
+      value: d.passivePct + '%',
+      unit: 'of sentences',
+      status: d.passivePct <= 15 ? 'pass' : d.passivePct <= 30 ? 'warn' : 'fail',
+      statusText: d.passivePct <= 15 ? '✓ Mostly active voice' : d.passivePct <= 30 ? '⚠ Review passive use' : '✗ Excessive passive voice'
+    },
+    {
+      label: 'Subheadings',
+      value: d.subheadings.length,
+      unit: 'detected',
+      status: d.subheadings.length >= 1 ? 'pass' : 'fail',
+      statusText: d.subheadings.length >= 1 ? '✓ Subheadings present' : '✗ No subheadings found'
+    },
+    {
+      label: '1st Subheading',
+      value: d.firstSubPos === Infinity ? 'N/A' : d.firstSubPos,
+      unit: 'words in',
+      status: d.firstSubPos <= 300 ? 'pass' : d.firstSubPos <= 400 ? 'warn' : 'fail',
+      statusText: d.firstSubPos <= 300 ? '✓ Before 300 words' : d.firstSubPos === Infinity ? '✗ No subheadings' : '⚠ After 300 words'
+    },
+    {
+      label: 'Quote Ratio',
+      value: d.quoteRatio + '%',
+      unit: 'of content',
+      status: d.quoteRatio <= 25 ? 'pass' : d.quoteRatio <= 35 ? 'warn' : 'fail',
+      statusText: d.quoteRatio <= 25 ? '✓ ~80:20 balance OK' : d.quoteRatio <= 35 ? '⚠ Quotes a bit high' : '✗ Quotes overpower content'
+    },
+    {
+      label: 'Long Paragraphs',
+      value: d.longParas.length,
+      unit: 'flagged',
+      status: d.longParas.length === 0 ? 'pass' : d.longParas.length <= 2 ? 'warn' : 'fail',
+      statusText: d.longParas.length === 0 ? '✓ Paragraphs OK' : '⚠ Some paragraphs too long'
+    },
+    {
+      label: 'Clickbait Words',
+      value: d.clickbaitFound.length,
+      unit: 'in title',
+      status: d.clickbaitFound.length === 0 ? 'pass' : 'warn',
+      statusText: d.clickbaitFound.length === 0 ? '✓ No obvious clickbait' : '⚠ Review: ' + d.clickbaitFound.join(', ')
+    },
+    {
+      label: 'Detected Quotes',
+      value: d.quotes.length,
+      unit: 'quote blocks',
+      status: 'neutral',
+      statusText: 'Manual check: are they italic?'
+    }
+  ];
+
+  document.getElementById('metricsGrid').innerHTML = metrics.map(m => `
+    <div class="analysis-item ${m.status}">
+      <div class="metric-label">${m.label}</div>
+      <div class="metric">${m.value}</div>
+      <div style="font-size:11px;color:#888;">${m.unit}</div>
+      <div class="metric-status">${m.statusText}</div>
+    </div>
+  `).join('');
+
+  // Issues & passes
+  const issues = [], passes = [];
+
+  if (d.wordCount < 400) issues.push({type:'fail', text:`Word count is ${d.wordCount} — minimum is 400 (excluding captions/embeds).`});
+  else passes.push(`Word count: ${d.wordCount} words — meets the 400-word minimum.`);
+
+  if (d.subheadings.length === 0) issues.push({type:'fail', text:`No subheadings detected. All articles must be divided by H2 subheadings.`});
+  else passes.push(`${d.subheadings.length} subheading(s) detected: "${d.subheadings.slice(0,2).join('", "')}"`);
+
+  if (d.firstSubPos > 300) issues.push({type:'warn', text:`First subheading appears after ~${d.firstSubPos} words. Should appear before 300 words.`});
+  else if (d.firstSubPos <= 300) passes.push(`First subheading appears before 300 words (at ~${d.firstSubPos} words). ✓`);
+
+  if (d.longSentPct > 35) issues.push({type:'fail', text:`${d.longSentPct}% of sentences exceed 15 words. This significantly hurts Flesch readability.`});
+  else if (d.longSentPct > 20) issues.push({type:'warn', text:`${d.longSentPct}% of sentences exceed 15 words. Aim for a mix of short and long.`});
+  else passes.push(`Sentence length: only ${d.longSentPct}% exceed 15 words — good readability.`);
+
+  if (d.passivePct > 30) issues.push({type:'fail', text:`${d.passivePct}% passive voice detected. ES strongly prefers active voice throughout.`});
+  else if (d.passivePct > 15) issues.push({type:'warn', text:`${d.passivePct}% passive voice. Review and convert where possible.`});
+  else passes.push(`Passive voice at ${d.passivePct}% — predominantly active voice. ✓`);
+
+  if (d.quoteRatio > 35) issues.push({type:'fail', text:`Quote ratio is ~${d.quoteRatio}%. Quotes are overpowering original content. Target is ≤20%.`});
+  else if (d.quoteRatio > 25) issues.push({type:'warn', text:`Quote ratio ~${d.quoteRatio}%. Slightly above 20% target — check the 80:20 balance.`});
+  else passes.push(`Quote ratio ~${d.quoteRatio}% — within the 80:20 original content guideline. ✓`);
+
+
+  if (d.longParas.length > 0) issues.push({type:'warn', text:`${d.longParas.length} paragraph(s) detected that may be too long. Keep paragraphs to 2–5 lines (mobile-friendly).`});
+  else passes.push(`No overly long paragraphs detected. ✓`);
+
+  if (d.clickbaitFound.length > 0) issues.push({type:'warn', text:`Potential clickbait words in title: "${d.clickbaitFound.join('", "')}". Verify these are justified.`});
+  else passes.push(`No obvious clickbait words detected in title. ✓`);
+
+  document.getElementById('issuesList').innerHTML = issues.map(i => `
+    <li class="issue-${i.type}"><span class="issue-icon">${i.type==='fail'?'✗':i.type==='warn'?'⚠':'✓'}</span>${i.text}</li>
+  `).join('') || '<li class="issue-pass"><span class="issue-icon">✓</span>No issues detected!</li>';
+
+  document.getElementById('passList').innerHTML = passes.map(p => `
+    <li class="issue-pass"><span class="issue-icon">✓</span>${p}</li>
+  `).join('') || '<li style="color:#999; padding:8px">Run analysis to see passing checks.</li>';
+
+  // Long sentences highlight
+  const longHTML = d.longSentences.length > 0
+    ? d.longSentences.slice(0, 20).map(s => `<p style="margin-bottom:8px;"><span class="sentence-chip sentence-long">${s.trim()}</span> <span style="font-size:11px;color:#999;">(${getWordCount(s)} words)</span></p>`).join('')
+    : '<p style="color:#aaa; font-style:italic;">No sentences over 15 words found. Great job!</p>';
+  document.getElementById('longSentencesOutput').innerHTML = longHTML;
+
+  // Passive sentences highlight
+  const passiveHTML = d.passiveSentences.length > 0
+    ? d.passiveSentences.slice(0, 15).map(s => `<p style="margin-bottom:8px;"><span class="sentence-chip sentence-passive">${s.trim()}</span></p>`).join('')
+    : '<p style="color:#aaa; font-style:italic;">No obvious passive constructions detected.</p>';
+  document.getElementById('passiveOutput').innerHTML = passiveHTML;
+
+  // Store for results tab
+  analysisData._metrics = metrics;
+  analysisData._issues = issues;
+  analysisData._passes = passes;
+}
+
+// =====================
+// SCORING
+// =====================
+
+function renderResults() {
+  document.getElementById('resultsEmpty').style.display = 'none';
+  document.getElementById('resultsContent').style.display = 'block';
+
+  // Submission details
+  const now = new Date().toLocaleDateString('en-IN', {day:'numeric',month:'long',year:'numeric'});
+  document.getElementById('submissionDetails').innerHTML = `
+    <div><strong>Writer:</strong> ${document.getElementById('writerName').value || '—'}</div>
+    <div><strong>Evaluator:</strong> ${document.getElementById('evaluatorName').value || '—'}</div>
+    <div><strong>Evaluated On:</strong> ${now}</div>
+    <div><strong>Word Count:</strong> ${analysisData.wordCount || '—'}</div>
+  `;
+
+  // Metrics grid in results
+  if (analysisData._metrics) {
+    document.getElementById('metricsGridResults').innerHTML = analysisData._metrics.map(m => `
+      <div class="analysis-item ${m.status}">
+        <div class="metric-label">${m.label}</div>
+        <div class="metric">${m.value}</div>
+        <div style="font-size:11px;color:#888;">${m.unit}</div>
+        <div class="metric-status">${m.statusText}</div>
+      </div>
+    `).join('');
+  } else {
+    document.getElementById('metricsGridResults').innerHTML = '<div style="color:#aaa; padding:12px;">Run auto-analysis first.</div>';
+  }
+
+  // Issues in results
+  if (analysisData._issues) {
+    document.getElementById('issuesListResults').innerHTML = analysisData._issues.map(i => `
+      <li class="issue-${i.type}"><span class="issue-icon">${i.type==='fail'?'✗':i.type==='warn'?'⚠':'✓'}</span>${i.text}</li>
+    `).join('') || '<li class="issue-pass"><span class="issue-icon">✓</span>No issues detected!</li>';
+  }
+
+}
+
+function copyToClipboard() {
+  const writer = document.getElementById('writerName').value || 'N/A';
+  const evaluator = document.getElementById('evaluatorName').value || 'N/A';
+  const title = document.getElementById('articleTitle').value || 'N/A';
+  const now = new Date().toLocaleDateString();
+
+  const issueLines = (analysisData._issues || []).map(i => `${i.type === 'fail' ? '✗' : '⚠'} ${i.text}`).join('\n') || 'No issues detected.';
+  const passLines = (analysisData._passes || []).join('\n') || 'N/A';
+
+  const text = `ES WRITER TRIAL EVALUATION
+==========================
+Writer: ${writer}
+Evaluator: ${evaluator}
+Article: ${title}
+Date: ${now}
+Word Count: ${analysisData.wordCount || '—'}
+
+ISSUES
+------
+${issueLines}
+
+PASSES
+------
+${passLines}
+`;
+  navigator.clipboard.writeText(text).then(() => alert('Summary copied to clipboard!')).catch(() => alert('Copy failed — please manually select and copy.'));
+}
+
+function resetForm() {
+  if (!confirm('Reset all fields? This cannot be undone.')) return;
+  document.querySelectorAll('input[type="text"], textarea, select').forEach(el => el.value = '');
+  document.querySelectorAll('input[type="checkbox"]').forEach(el => el.checked = false);
+  analysisData = {};
+  // Reset upload state
+  removeFile();
+  document.getElementById('chkUpload').checked = false;
+  document.getElementById('chkPaste').checked = false;
+  currentInputMode = '';
+  document.getElementById('modeUploadPanel').classList.remove('active');
+  document.getElementById('modePastePanel').classList.remove('active');
+  document.getElementById('autoAnalysisEmpty').style.display = 'block';
+  document.getElementById('autoAnalysisResults').style.display = 'none';
+  document.getElementById('resultsEmpty').style.display = 'block';
+  document.getElementById('resultsContent').style.display = 'none';
+  document.getElementById('stickyScore').style.display = 'none';
+  document.getElementById('wordCountLive').textContent = '0 words';
+  document.getElementById('metaCount').textContent = '0 / 120–156 characters';
+  switchTab('input');
+}
+
+// =====================
+// FILE UPLOAD HANDLING
+// =====================
+
+let currentInputMode = ''; // 'upload' | 'paste' | ''
+let extractedText = '';
+
+function handleModeCheckbox(selected) {
+  const uploadChk = document.getElementById('chkUpload');
+  const pasteChk  = document.getElementById('chkPaste');
+  // Only one active at a time
+  if (selected === 'upload') { pasteChk.checked = false; }
+  else                        { uploadChk.checked = false; }
+
+  if (!uploadChk.checked && !pasteChk.checked) {
+    currentInputMode = '';
+    document.getElementById('modeUploadPanel').classList.remove('active');
+    document.getElementById('modePastePanel').classList.remove('active');
+  } else {
+    currentInputMode = selected;
+    document.getElementById('modeUploadPanel').classList.toggle('active', selected === 'upload');
+    document.getElementById('modePastePanel').classList.toggle('active', selected === 'paste');
+  }
+}
+
+// keep old name usable internally
+function setInputMode(mode) { handleModeCheckbox(mode); }
+
+function getArticleBodyText() {
+  if (currentInputMode === 'upload') {
+    return extractedText;
+  }
+  return document.getElementById('articleBody').value;
+}
+
+// Override runAnalysis to use the right text source
+const _origRunAnalysis = runAnalysis;
+window.runAnalysis = function() {
+  // Ensure articleBody has content from whichever mode is active
+  if (currentInputMode === '') {
+    alert('Please select an input method — tick "Attach File" or "Manual Input".');
+    return;
+  }
+  if (currentInputMode === 'upload') {
+    if (!extractedText.trim()) {
+      alert('Please attach a file first, or tick "Manual Input" to paste the text.');
+      return;
+    }
+    document.getElementById('articleBody').value = extractedText;
+  }
+  _origRunAnalysis();
+};
+
+function handleDragOver(e) {
+  e.preventDefault();
+  document.getElementById('uploadZone').classList.add('drag-over');
+}
+function handleDragLeave(e) {
+  document.getElementById('uploadZone').classList.remove('drag-over');
+}
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('uploadZone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) processFile(file);
+}
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) processFile(file);
+}
+
+function processFile(file) {
+  const name = file.name;
+  const ext = name.split('.').pop().toLowerCase();
+  const size = (file.size / 1024).toFixed(1) + ' KB';
+
+  if (!['txt','docx','doc','pdf'].includes(ext)) {
+    showUploadStatus('error', '✗ Unsupported file type. Please use .docx, .pdf, or .txt');
+    return;
+  }
+
+  showUploadStatus('loading', 'Extracting text from ' + name + '…');
+  showFilePreview(name, size, ext);
+
+  if (ext === 'txt') {
+    const reader = new FileReader();
+    reader.onload = e => onTextExtracted(e.target.result, name, size, ext);
+    reader.onerror = () => showUploadStatus('error', '✗ Could not read file.');
+    reader.readAsText(file);
+  } else if (ext === 'docx' || ext === 'doc') {
+    const reader = new FileReader();
+    reader.onload = e => {
+      mammoth.extractRawText({ arrayBuffer: e.target.result })
+        .then(result => onTextExtracted(result.value, name, size, ext))
+        .catch(err => showUploadStatus('error', '✗ DOCX parse error: ' + err.message));
+    };
+    reader.onerror = () => showUploadStatus('error', '✗ Could not read file.');
+    reader.readAsArrayBuffer(file);
+  } else if (ext === 'pdf') {
+    const reader = new FileReader();
+    reader.onload = async e => {
+      try {
+        // Configure pdf.js worker
+        if (window.pdfjsLib) {
+          pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          const pdf = await pdfjsLib.getDocument({ data: e.target.result }).promise;
+          let fullText = '';
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            const pageText = content.items.map(item => item.str).join(' ');
+            fullText += pageText + '\n\n';
+          }
+          onTextExtracted(fullText.trim(), name, size, ext);
+        } else {
+          showUploadStatus('error', '✗ PDF library not loaded. Check your internet connection.');
+        }
+      } catch (err) {
+        showUploadStatus('error', '✗ PDF parse error: ' + err.message);
+      }
+    };
+    reader.onerror = () => showUploadStatus('error', '✗ Could not read PDF.');
+    reader.readAsArrayBuffer(file);
+  }
+}
+
+function onTextExtracted(text, name, size, ext) {
+  if (!text || text.trim().length < 20) {
+    showUploadStatus('error', '✗ Could not extract readable text. Try copy-pasting instead.');
+    return;
+  }
+
+  // Try to auto-detect title (first non-empty line that looks like a headline)
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  let potentialTitle = '';
+  let bodyStart = 0;
+  if (lines.length > 0 && lines[0].length < 160 && lines[0].length > 10) {
+    // Check if first line looks like a title (not a long paragraph)
+    const wordCount = lines[0].split(/\s+/).length;
+    if (wordCount <= 20) {
+      potentialTitle = lines[0];
+      bodyStart = 1;
+    }
+  }
+
+  // If title field is empty, auto-fill it
+  const titleField = document.getElementById('articleTitle');
+  if (!titleField.value.trim() && potentialTitle) {
+    titleField.value = potentialTitle;
+    updateTitleCount();
+  }
+
+  // Set extracted text (skip the first line if used as title)
+  extractedText = lines.slice(bodyStart).join('\n\n');
+
+  // Show in editable preview
+  const preview = document.getElementById('extractedPreview');
+  preview.value = extractedText;
+  document.getElementById('extractedPreviewWrap').style.display = 'block';
+
+  const wc = countWords(extractedText);
+  document.getElementById('wordCountLive2').textContent = wc + ' words';
+  document.getElementById('wordCountLive2').className =
+    'char-count ' + (wc >= 400 ? 'good' : 'warn');
+
+  showUploadStatus('success',
+    `✓ Extracted ${wc} words from ${name}` +
+    (potentialTitle ? ` — title auto-filled` : '')
+  );
+}
+
+function syncFromPreview() {
+  extractedText = document.getElementById('extractedPreview').value;
+  const wc = countWords(extractedText);
+  document.getElementById('wordCountLive2').textContent = wc + ' words';
+  document.getElementById('wordCountLive2').className =
+    'char-count ' + (wc >= 400 ? 'good' : 'warn');
+}
+
+function showUploadStatus(type, message) {
+  const el = document.getElementById('uploadStatus');
+  const spinner = document.getElementById('uploadSpinner');
+  el.className = 'upload-status ' + type;
+  document.getElementById('uploadStatusText').textContent = message;
+  spinner.style.display = type === 'loading' ? 'block' : 'none';
+}
+
+function showFilePreview(name, size, ext) {
+  const icons = { docx: '📝', doc: '📝', pdf: '📕', txt: '📄' };
+  document.getElementById('fileIconDisplay').textContent = icons[ext] || '📄';
+  document.getElementById('fileNameDisplay').textContent = name;
+  document.getElementById('fileMetaDisplay').textContent = size + ' · ' + ext.toUpperCase();
+  document.getElementById('filePreview').style.display = 'block';
+}
+
+function removeFile() {
+  extractedText = '';
+  document.getElementById('fileInput').value = '';
+  document.getElementById('filePreview').style.display = 'none';
+  document.getElementById('extractedPreviewWrap').style.display = 'none';
+  document.getElementById('uploadStatus').className = 'upload-status';
+  document.getElementById('extractedPreview').value = '';
+  document.getElementById('wordCountLive2').textContent = '0 words';
+}
+
+let extractedPreviewVisible = true;
+function toggleExtractedPreview() {
+  extractedPreviewVisible = !extractedPreviewVisible;
+  document.getElementById('extractedPreview').style.display =
+    extractedPreviewVisible ? 'block' : 'none';
+  document.getElementById('extractedToggleBtn').textContent =
+    extractedPreviewVisible ? 'Hide ▲' : 'Show ▼';
+}
+
+// =====================
+// Initial hide of results content
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('resultsContent').style.display = 'none';
+});
+</script>
+</body>
+</html>
