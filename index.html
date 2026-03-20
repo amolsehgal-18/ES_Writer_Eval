@@ -442,10 +442,10 @@
 // =====================
 // GOOGLE SHEETS LOGGING
 // =====================
-const APPS_SCRIPT_URL = 'PASTE_YOUR_WEB_APP_URL_HERE';
+const APPS_SCRIPT_URL = 'https://script.google.com/a/macros/essentiallysports.com/s/AKfycbyKQ4XPRsXz-Bfh8bnAQp1flWojZJ5cBfdeHMa85tlEm6VOB7s37U1jZTqFBt9SeEux/exec';
 
 function saveToSheet() {
-  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'PASTE_YOUR_WEB_APP_URL_HERE') return;
+  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'https://script.google.com/a/macros/essentiallysports.com/s/AKfycbyKQ4XPRsXz-Bfh8bnAQp1flWojZJ5cBfdeHMa85tlEm6VOB7s37U1jZTqFBt9SeEux/exec') return;
   if (!analysisData || !analysisData.wordCount) return;
 
   const issues = analysisData._issues || [];
